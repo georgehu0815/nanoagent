@@ -1,0 +1,25 @@
+digraph AzureContainerApps {
+  rankdir=LR;
+  node [shape=rectangle, style=filled, fillcolor=white, fontname=Helvetica];
+
+  User [label="User", shape=oval, fillcolor=lightgray];
+  FrontDoor [label="Azure Front Door\n(Optional)", fillcolor=lightblue];
+  VNet [label="Virtual Network", fillcolor=azure];
+  ACAEnv [label="Azure Container Apps\nEnvironment", fillcolor=lightyellow];
+  ContainerApp [label="Container App", fillcolor=lightyellow];
+
+  ACR [label="Azure Container Registry", fillcolor=lightgreen];
+  KeyVault [label="Azure Key Vault", fillcolor=lightgreen];
+  LogAnalytics [label="Log Analytics Workspace", fillcolor=lightgreen];
+  Monitor [label="Azure Monitor", fillcolor=lightgreen];
+
+  User -> FrontDoor -> ACAEnv;
+  ACAEnv -> ContainerApp;
+
+  ACAEnv -> VNet [style=dashed];
+
+  ContainerApp -> ACR [label="pull image", style=dashed];
+  ContainerApp -> KeyVault [label="secrets", style=dashed];
+  ContainerApp -> LogAnalytics [label="logs", style=dashed];
+  LogAnalytics -> Monitor [label="metrics & alerts", style=dashed];
+}

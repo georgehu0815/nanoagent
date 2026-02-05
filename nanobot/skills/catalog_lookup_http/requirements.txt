@@ -1,0 +1,9 @@
+# MCP dependencies
+mcp>=1.0.0
+
+# HTTP/SSE server dependencies
+fastapi>=0.100.0
+uvicorn>=0.23.0
+
+# Optional: for production deployments
+python-dotenv>=1.0.0

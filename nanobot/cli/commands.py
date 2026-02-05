@@ -20,7 +20,7 @@ console = Console()
 
 def version_callback(value: bool):
     if value:
-        console.print(f"{__logo__} nanobot v{__version__}")
+        console.print(f"{__logo__} nanobot v{__version__} - commands.py:23")
         raise typer.Exit()
 
 
@@ -49,28 +49,28 @@ def onboard():
     config_path = get_config_path()
     
     if config_path.exists():
-        console.print(f"[yellow]Config already exists at {config_path}[/yellow]")
+        console.print(f"[yellow]Config already exists at {config_path}[/yellow] - commands.py:52")
         if not typer.confirm("Overwrite?"):
             raise typer.Exit()
     
     # Create default config
     config = Config()
     save_config(config)
-    console.print(f"[green]✓[/green] Created config at {config_path}")
+    console.print(f"[green]✓[/green] Created config at {config_path} - commands.py:59")
     
     # Create workspace
     workspace = get_workspace_path()
-    console.print(f"[green]✓[/green] Created workspace at {workspace}")
+    console.print(f"[green]✓[/green] Created workspace at {workspace} - commands.py:63")
     
     # Create default bootstrap files
     _create_workspace_templates(workspace)
     
-    console.print(f"\n{__logo__} nanobot is ready!")
-    console.print("\nNext steps:")
-    console.print("  1. Add your API key to [cyan]~/.nanobot/config.json[/cyan]")
-    console.print("     Get one at: https://openrouter.ai/keys")
-    console.print("  2. Chat: [cyan]nanobot agent -m \"Hello!\"[/cyan]")
-    console.print("\n[dim]Want Telegram/WhatsApp? See: https://github.com/HKUDS/nanobot#-chat-apps[/dim]")
+    console.print(f"\n{__logo__} nanobot is ready! - commands.py:68")
+    console.print("\nNext steps: - commands.py:69")
+    console.print("1. Add your API key to [cyan]~/.nanobot/config.json[/cyan] - commands.py:70")
+    console.print("Get one at: https://openrouter.ai/keys - commands.py:71")
+    console.print("2. Chat: [cyan]nanobot agent m \"Hello!\"[/cyan] - commands.py:72")
+    console.print("\n[dim]Want Telegram/WhatsApp? See: https://github.com/HKUDS/nanobot#chatapps[/dim] - commands.py:73")
 
 
 
@@ -161,39 +161,54 @@ def gateway(
     from nanobot.config.loader import load_config, get_data_dir
     from nanobot.bus.queue import MessageBus
     from nanobot.providers.litellm_provider import LiteLLMProvider
+    from nanobot.providers.azure_provider import AzureOpenAIProvider
     from nanobot.agent.loop import AgentLoop
     from nanobot.channels.manager import ChannelManager
     from nanobot.cron.service import CronService
     from nanobot.cron.types import CronJob
     from nanobot.heartbeat.service import HeartbeatService
-    
+
     if verbose:
         import logging
         logging.basicConfig(level=logging.DEBUG)
-    
+
     console.print(f"{__logo__} Starting nanobot gateway on port {port}...")
-    
+
     config = load_config()
-    
+
     # Create components
     bus = MessageBus()
-    
-    # Create provider (supports OpenRouter, Anthropic, OpenAI, Bedrock)
-    api_key = config.get_api_key()
-    api_base = config.get_api_base()
+
+    # Create provider (supports Azure, OpenRouter, Anthropic, OpenAI, Bedrock)
     model = config.agents.defaults.model
     is_bedrock = model.startswith("bedrock/")
 
-    if not api_key and not is_bedrock:
-        console.print("[red]Error: No API key configured.[/red]")
-        console.print("Set one in ~/.nanobot/config.json under providers.openrouter.apiKey")
-        raise typer.Exit(1)
-    
-    provider = LiteLLMProvider(
-        api_key=api_key,
-        api_base=api_base,
-        default_model=config.agents.defaults.model
-    )
+    # Check if Azure is configured
+    if config.is_azure_configured():
+        azure_config = config.get_azure_config()
+        provider = AzureOpenAIProvider(
+            api_key=azure_config["api_key"] if azure_config["api_key"] else None,
+            api_base=azure_config["api_base"],
+            api_version=azure_config["api_version"],
+            deployment=azure_config["deployment"],
+            use_azure_ad=azure_config["use_azure_ad"],
+        )
+        console.print(f"[green]✓[/green] Using Azure OpenAI ({azure_config['deployment']})")
+    else:
+        # Fall back to LiteLLM for other providers
+        api_key = config.get_api_key()
+        api_base = config.get_api_base()
+
+        if not api_key and not is_bedrock:
+            console.print("[red]Error: No API key configured.[/red]")
+            console.print("Set one in ~/.nanobot/config.json under providers")
+            raise typer.Exit(1)
+
+        provider = LiteLLMProvider(
+            api_key=api_key,
+            api_base=api_base,
+            default_model=config.agents.defaults.model
+        )
     
     # Create agent
     agent = AgentLoop(
@@ -286,25 +301,40 @@ def agent(
     from nanobot.config.loader import load_config
     from nanobot.bus.queue import MessageBus
     from nanobot.providers.litellm_provider import LiteLLMProvider
+    from nanobot.providers.azure_provider import AzureOpenAIProvider
     from nanobot.agent.loop import AgentLoop
-    
+
     config = load_config()
-    
-    api_key = config.get_api_key()
-    api_base = config.get_api_base()
+
     model = config.agents.defaults.model
     is_bedrock = model.startswith("bedrock/")
 
-    if not api_key and not is_bedrock:
-        console.print("[red]Error: No API key configured.[/red]")
-        raise typer.Exit(1)
+    # Check if Azure is configured
+    if config.is_azure_configured():
+        azure_config = config.get_azure_config()
+        provider = AzureOpenAIProvider(
+            api_key=azure_config["api_key"] if azure_config["api_key"] else None,
+            api_base=azure_config["api_base"],
+            api_version=azure_config["api_version"],
+            deployment=azure_config["deployment"],
+            use_azure_ad=azure_config["use_azure_ad"],
+        )
+    else:
+        # Fall back to LiteLLM for other providers
+        api_key = config.get_api_key()
+        api_base = config.get_api_base()
+
+        if not api_key and not is_bedrock:
+            console.print("[red]Error: No API key configured.[/red]")
+            raise typer.Exit(1)
+
+        provider = LiteLLMProvider(
+            api_key=api_key,
+            api_base=api_base,
+            default_model=config.agents.defaults.model
+        )
 
     bus = MessageBus()
-    provider = LiteLLMProvider(
-        api_key=api_key,
-        api_base=api_base,
-        default_model=config.agents.defaults.model
-    )
     
     agent_loop = AgentLoop(
         bus=bus,
@@ -636,14 +666,17 @@ def status():
 
     if config_path.exists():
         console.print(f"Model: {config.agents.defaults.model}")
-        
+
         # Check API keys
+        has_azure = config.is_azure_configured()
         has_openrouter = bool(config.providers.openrouter.api_key)
         has_anthropic = bool(config.providers.anthropic.api_key)
         has_openai = bool(config.providers.openai.api_key)
         has_gemini = bool(config.providers.gemini.api_key)
         has_vllm = bool(config.providers.vllm.api_base)
-        
+
+        azure_status = f"[green]✓ {config.providers.azure.deployment} @ {config.providers.azure.api_base}[/green]" if has_azure else "[dim]not set[/dim]"
+        console.print(f"Azure OpenAI: {azure_status}")
         console.print(f"OpenRouter API: {'[green]✓[/green]' if has_openrouter else '[dim]not set[/dim]'}")
         console.print(f"Anthropic API: {'[green]✓[/green]' if has_anthropic else '[dim]not set[/dim]'}")
         console.print(f"OpenAI API: {'[green]✓[/green]' if has_openai else '[dim]not set[/dim]'}")

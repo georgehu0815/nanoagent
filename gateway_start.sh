@@ -1,0 +1,1 @@
+nanobot gateway --port 18790

@@ -1,0 +1,34 @@
+name: catalog_lookup_http
+description: Retrieve catalog item information, summary, search, or list available tools via HTTP/SSE MCP
+version: 4.0.0
+
+entrypoint: skill.py
+
+inputs:
+  item_id:
+    type: string
+    description: Catalog item identifier (required for get_catalog_item and get_summary_item)
+  query:
+    type: string
+    description: Search query string (required for search_catalog)
+  operation:
+    type: string
+    description: Operation to perform (get_catalog_item, get_summary_item, search_catalog, or list_tools)
+    default: get_catalog_item
+
+outputs:
+  item:
+    type: object
+    description: The catalog or summary item data (for single item operations)
+  results:
+    type: array
+    description: Array of catalog items matching the search query (for search_catalog)
+  tools:
+    type: array
+    description: Array of available tools with their descriptions (for list_tools)
+  count:
+    type: integer
+    description: Number of results/tools returned
+  operation:
+    type: string
+    description: The operation that was performed

@@ -1,0 +1,56 @@
+sequenceDiagram
+    participant User
+    participant Channel as Channel Handler<br/>(Telegram/WhatsApp/CLI)
+    participant InboundQ as InboundQueue<br/>(AsyncIO)
+    participant Agent as Agent Loop
+    participant Context as Context Builder
+    participant Session as Session Manager
+    participant Memory as Memory Store
+    participant Skills as Skills Loader
+    participant LLM as LLM Provider<br/>(OpenRouter/Claude/etc)
+    participant Tools as Tool Registry
+    participant OutboundQ as OutboundQueue<br/>(AsyncIO)
+
+    Note over User,OutboundQ: Phase 1: Message Reception
+    User->>Channel: 1. Send message<br/>("What's the weather?")
+    Channel->>Channel: 2. Validate sender<br/>(check allow_from list)
+    Channel->>InboundQ: 3. publish_inbound()<br/>InboundMessage
+
+    Note over User,OutboundQ: Phase 2: Context Assembly
+    InboundQ->>Agent: 4. consume_inbound()<br/>Pop from queue
+    Agent->>Context: 5. build_system_prompt()
+    Context->>Context: 6. Load bootstrap files<br/>(AGENTS.md, SOUL.md, USER.md)
+    Context->>Session: 7. get_history(limit=50)
+    Session-->>Context: Recent messages
+    Context->>Memory: 8. read_memory()
+    Memory-->>Context: MEMORY.md + today's note
+    Context->>Skills: 9. load_skills()
+    Skills-->>Context: All skill definitions
+    Context-->>Agent: System prompt assembled
+
+    Note over User,OutboundQ: Phase 3: LLM Interaction (Iteration 1)
+    Agent->>LLM: 10. chat(messages, tools)<br/>[system, history, user_msg]
+    LLM-->>Agent: Response with tool_call<br/>web_search("weather Tokyo")
+
+    Note over User,OutboundQ: Phase 4: Tool Execution
+    Agent->>Tools: 11. execute_tool()<br/>web_search("weather Tokyo")
+    Tools->>Tools: 12. Validate parameters<br/>(check JSON schema)
+    Tools->>Tools: 13. Execute search<br/>(Brave API call)
+    Tools-->>Agent: Tool result<br/>("Sunny, 22°C in Tokyo")
+
+    Note over User,OutboundQ: Phase 5: LLM Interaction (Iteration 2)
+    Agent->>LLM: 14. chat(messages + tool_result)
+    LLM-->>Agent: Final response<br/>("The weather in Tokyo is...")
+
+    Note over User,OutboundQ: Phase 6: Session Storage
+    Agent->>Session: 15. save_message(user_msg)
+    Agent->>Session: 16. save_message(assistant_msg)
+    Session->>Session: 17. Append to JSONL<br/>(telegram-12345.jsonl)
+
+    Note over User,OutboundQ: Phase 7: Response Dispatch
+    Agent->>OutboundQ: 18. publish_outbound()<br/>OutboundMessage
+    OutboundQ->>Channel: 19. dispatch_outbound()<br/>Callback invoked
+    Channel->>Channel: 20. Format response<br/>(Markdown → HTML)
+    Channel->>User: 21. Send response<br/>(Telegram API / WebSocket)
+
+    Note over User,OutboundQ: Total Round Trip: ~1-3 seconds (+ LLM latency)

@@ -28,7 +28,7 @@ class ChannelsConfig(BaseModel):
 class AgentDefaults(BaseModel):
     """Default agent configuration."""
     workspace: str = "~/.nanobot/workspace"
-    model: str = "anthropic/claude-opus-4-5"
+    model: str = "azure/gpt-5.2-chat"
     max_tokens: int = 8192
     temperature: float = 0.7
     max_tool_iterations: int = 20
@@ -45,8 +45,18 @@ class ProviderConfig(BaseModel):
     api_base: str | None = None
 
 
+class AzureProviderConfig(BaseModel):
+    """Azure OpenAI provider configuration."""
+    api_key: str = ""  # Optional, uses Azure AD if not provided
+    api_base: str = ""  # Azure endpoint
+    api_version: str = "2025-01-01-preview"
+    deployment: str = "gpt-5.2-chat"  # Default deployment name
+    use_azure_ad: bool = True  # Use Azure AD authentication by default
+
+
 class ProvidersConfig(BaseModel):
     """Configuration for LLM providers."""
+    azure: AzureProviderConfig = Field(default_factory=AzureProviderConfig)
     anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
     openai: ProviderConfig = Field(default_factory=ProviderConfig)
     openrouter: ProviderConfig = Field(default_factory=ProviderConfig)
@@ -99,8 +109,9 @@ class Config(BaseSettings):
         return Path(self.agents.defaults.workspace).expanduser()
     
     def get_api_key(self) -> str | None:
-        """Get API key in priority order: OpenRouter > Anthropic > OpenAI > Gemini > Zhipu > Groq > vLLM."""
+        """Get API key in priority order: Azure > OpenRouter > Anthropic > OpenAI > Gemini > Zhipu > Groq > vLLM."""
         return (
+            self.providers.azure.api_key or
             self.providers.openrouter.api_key or
             self.providers.anthropic.api_key or
             self.providers.openai.api_key or
@@ -110,9 +121,11 @@ class Config(BaseSettings):
             self.providers.vllm.api_key or
             None
         )
-    
+
     def get_api_base(self) -> str | None:
-        """Get API base URL if using OpenRouter, Zhipu or vLLM."""
+        """Get API base URL if using Azure, OpenRouter, Zhipu or vLLM."""
+        if self.providers.azure.api_base:
+            return self.providers.azure.api_base
         if self.providers.openrouter.api_key:
             return self.providers.openrouter.api_base or "https://openrouter.ai/api/v1"
         if self.providers.zhipu.api_key:
@@ -120,6 +133,20 @@ class Config(BaseSettings):
         if self.providers.vllm.api_base:
             return self.providers.vllm.api_base
         return None
+
+    def is_azure_configured(self) -> bool:
+        """Check if Azure OpenAI is configured."""
+        return bool(self.providers.azure.api_base)
+
+    def get_azure_config(self) -> dict:
+        """Get Azure OpenAI configuration."""
+        return {
+            "api_base": self.providers.azure.api_base,
+            "api_version": self.providers.azure.api_version,
+            "deployment": self.providers.azure.deployment,
+            "api_key": self.providers.azure.api_key,
+            "use_azure_ad": self.providers.azure.use_azure_ad,
+        }
     
     class Config:
         env_prefix = "NANOBOT_"

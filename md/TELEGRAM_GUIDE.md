@@ -69,7 +69,7 @@ nanobot status
 
 5. **Save the token:** BotFather will give you a token like:
    ```
-8201530157:AAGGTo9lCRwYK26gJf_cLCgODsazSnyGPGk
+YOUR_BOT_TOKEN_HERE
    ```
 
    **⚠️ Keep this token secret!** Anyone with this token can control your bot.
@@ -92,7 +92,7 @@ Edit `~/.nanobot/config.json` and add your Telegram configuration:
   "channels": {
     "telegram": {
       "enabled": true,
-      "token": "8201530157:AAGGTo9lCRwYK26gJf_cLCgODsazSnyGPGk",
+      "token": "YOUR_BOT_TOKEN_HERE",
       "allowFrom": []
     },
     "whatsapp": {

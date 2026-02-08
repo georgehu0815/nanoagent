@@ -22,7 +22,7 @@
   },
   "providers": {
     "azure": {
-      "api_base": "https://datacopilothub8882317788.cognitiveservices.azure.com/",
+      "api_base": "https://<yourhub>.cognitiveservices.azure.com/",
       "api_version": "2025-01-01-preview",
       "deployment": "gpt-5.2-chat",
       "use_azure_ad": true,
@@ -37,7 +37,7 @@
       "api_base": null
     },
     "openrouter": {
-      "apiKey": "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",
+      "apiKey": "YOUR_OPENROUTER_API_KEY_HERE",
       "apiBase": null
     },
     "groq": {

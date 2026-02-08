@@ -100,12 +100,27 @@ class TelegramChannel(BaseChannel):
         
         self._running = True
         
-        # Build the application
-        self._app = (
-            Application.builder()
-            .token(self.config.token)
-            .build()
+        # Build the application with proper timeouts and proxy
+        builder = Application.builder().token(self.config.token)
+
+        # Configure connection timeouts (more lenient for polling)
+        builder = (
+            builder
+            .connect_timeout(30.0)  # 30s to establish connection
+            .read_timeout(30.0)     # 30s to read data
+            .write_timeout(30.0)    # 30s to write data
+            .pool_timeout(10.0)     # 10s to get connection from pool
+            .get_updates_read_timeout(30.0)  # 30s for getUpdates long polling
+            .get_updates_connect_timeout(10.0)  # 10s to connect for updates
+            .get_updates_pool_timeout(5.0)  # 5s to get connection for updates
         )
+
+        # Apply proxy if configured
+        if self.config.proxy:
+            logger.info(f"Using proxy: {self.config.proxy}")
+            builder = builder.get_updates_proxy(self.config.proxy)
+
+        self._app = builder.build()
         
         # Add message handler for text, photos, voice, documents
         self._app.add_handler(
@@ -130,10 +145,16 @@ class TelegramChannel(BaseChannel):
         bot_info = await self._app.bot.get_me()
         logger.info(f"Telegram bot @{bot_info.username} connected")
         
+        # Error callback for polling failures
+        def polling_error_callback(exc):
+            logger.warning(f"Telegram polling error (will auto-retry): {exc}")
+
         # Start polling (this runs until stopped)
         await self._app.updater.start_polling(
             allowed_updates=["message"],
-            drop_pending_updates=True  # Ignore old messages on startup
+            drop_pending_updates=True,  # Ignore old messages on startup
+            error_callback=polling_error_callback,  # Log but don't crash on errors
+            bootstrap_retries=5  # Retry connection up to 5 times
         )
         
         # Keep running until stopped

@@ -20,7 +20,7 @@ console = Console()
 
 def version_callback(value: bool):
     if value:
-        console.print(f"{__logo__} nanobot v{__version__}")
+        console.print(f"{__logo__} nanobot v{__version__} - commands.py:23")
         raise typer.Exit()
 
 
@@ -49,28 +49,28 @@ def onboard():
     config_path = get_config_path()
     
     if config_path.exists():
-        console.print(f"[yellow]Config already exists at {config_path}[/yellow]")
+        console.print(f"[yellow]Config already exists at {config_path}[/yellow] - commands.py:52")
         if not typer.confirm("Overwrite?"):
             raise typer.Exit()
     
     # Create default config
     config = Config()
     save_config(config)
-    console.print(f"[green]✓[/green] Created config at {config_path}")
+    console.print(f"[green]✓[/green] Created config at {config_path} - commands.py:59")
     
     # Create workspace
     workspace = get_workspace_path()
-    console.print(f"[green]✓[/green] Created workspace at {workspace}")
+    console.print(f"[green]✓[/green] Created workspace at {workspace} - commands.py:63")
     
     # Create default bootstrap files
     _create_workspace_templates(workspace)
     
-    console.print(f"\n{__logo__} nanobot is ready!")
-    console.print("\nNext steps:")
-    console.print("  1. Add your API key to [cyan]~/.nanobot/config.json[/cyan]")
-    console.print("     Get one at: https://openrouter.ai/keys")
-    console.print("  2. Chat: [cyan]nanobot agent -m \"Hello!\"[/cyan]")
-    console.print("\n[dim]Want Telegram/WhatsApp? See: https://github.com/HKUDS/nanobot#-chat-apps[/dim]")
+    console.print(f"\n{__logo__} nanobot is ready! - commands.py:68")
+    console.print("\nNext steps: - commands.py:69")
+    console.print("1. Add your API key to [cyan]~/.nanobot/config.json[/cyan] - commands.py:70")
+    console.print("Get one at: https://openrouter.ai/keys - commands.py:71")
+    console.print("2. Chat: [cyan]nanobot agent m \"Hello!\"[/cyan] - commands.py:72")
+    console.print("\n[dim]Want Telegram/WhatsApp? See: https://github.com/HKUDS/nanobot#chatapps[/dim] - commands.py:73")
 
 
 

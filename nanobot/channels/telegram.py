@@ -161,6 +161,9 @@ class TelegramChannel(BaseChannel):
         bot_info = await self._app.bot.get_me()
         logger.info(f"Telegram bot @{bot_info.username} connected")
         
+        def polling_error_callback(error: Exception) -> None:
+            logger.error("Telegram polling error: {}", error)
+
         # Start polling (this runs until stopped)
         await self._app.updater.start_polling(
             allowed_updates=["message"],

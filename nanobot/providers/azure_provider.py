@@ -36,24 +36,25 @@ class AzureOpenAIProvider(LLMProvider):
                 "https://cognitiveservices.azure.com/.default"
             )
 
-        # Create Azure OpenAI client
-        self.client = self._create_client()
+        # Client is created lazily on first use to avoid event-loop binding issues
+        # when the provider is instantiated before asyncio.run() starts.
+        self._client: AsyncAzureOpenAI | None = None
 
-    def _create_client(self) -> AsyncAzureOpenAI:
-        """Create the Azure OpenAI client."""
-        kwargs = {
-            "api_version": self.api_version,
-            "azure_endpoint": self.api_base,
-        }
-
-        if self.token_provider:
-            kwargs["azure_ad_token_provider"] = self.token_provider
-        elif self.api_key:
-            kwargs["api_key"] = self.api_key
-        else:
-            raise ValueError("Either api_key or Azure AD authentication must be configured")
-
-        return AsyncAzureOpenAI(**kwargs)
+    def _get_client(self) -> AsyncAzureOpenAI:
+        """Return the Azure OpenAI client, creating it on first call."""
+        if self._client is None:
+            kwargs: dict = {
+                "api_version": self.api_version,
+                "azure_endpoint": self.api_base,
+            }
+            if self.token_provider:
+                kwargs["azure_ad_token_provider"] = self.token_provider
+            elif self.api_key:
+                kwargs["api_key"] = self.api_key
+            else:
+                raise ValueError("Either api_key or Azure AD authentication must be configured")
+            self._client = AsyncAzureOpenAI(**kwargs)
+        return self._client
 
     async def chat(
         self,
@@ -98,10 +99,12 @@ class AzureOpenAIProvider(LLMProvider):
             kwargs["tool_choice"] = "auto"
 
         try:
-            response = await self.client.chat.completions.create(**kwargs)
+            response = await self._get_client().chat.completions.create(**kwargs)
             return self._parse_response(response)
         except Exception as e:
-            # Return error as content for graceful handling
+            import traceback
+            from loguru import logger
+            logger.error("Azure OpenAI error:\n{}", traceback.format_exc())
             return LLMResponse(
                 content=f"Error calling Azure OpenAI: {str(e)}",
                 finish_reason="error",

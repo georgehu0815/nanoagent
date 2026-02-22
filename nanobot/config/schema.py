@@ -204,7 +204,7 @@ class ProviderConfig(Base):
     extra_headers: dict[str, str] | None = None  # Custom headers (e.g. APP-Code for AiHubMix)
 
 
-class AzureProviderConfig(BaseModel):
+class AzureProviderConfig(Base):
     """Azure OpenAI provider configuration."""
     api_key: str = ""  # Optional, uses Azure AD if not provided
     api_base: str = ""  # Azure endpoint

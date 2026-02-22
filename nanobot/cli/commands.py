@@ -277,23 +277,50 @@ def _make_provider(config: Config):
     from nanobot.providers.custom_provider import CustomProvider
 
     model = config.agents.defaults.model
-    provider_name = config.get_provider_name(model)
-    p = config.get_provider(model)
+
+    # Azure OpenAI (managed identity or API key — no static key required)
+    if model.startswith("azure/") or config.is_azure_configured():
+        from nanobot.providers.azure_provider import AzureOpenAIProvider
+        az = config.providers.azure
+        return AzureOpenAIProvider(
+            api_key=az.api_key or None,
+            api_base=az.api_base,
+            api_version=az.api_version,
+            deployment=az.deployment,
+            use_azure_ad=az.use_azure_ad,
+        )
 
     # OpenAI Codex (OAuth)
-    if provider_name == "openai_codex" or model.startswith("openai-codex/"):
+    if model.startswith("openai-codex/"):
         return OpenAICodexProvider(default_model=model)
+
+    # Determine provider and its config via registry
+    from nanobot.providers.registry import find_by_model, find_by_name
+    provider_name = None
+    p = None
+    spec = find_by_model(model)
+    if spec:
+        provider_name = spec.name
+        p = getattr(config.providers, provider_name, None)
+
+    # If no registry match or no key, find first configured provider
+    if not p or not getattr(p, "api_key", None):
+        for name in ["openrouter", "anthropic", "openai", "deepseek", "gemini", "zhipu", "groq", "aihubmix", "siliconflow"]:
+            pc = getattr(config.providers, name, None)
+            if pc and pc.api_key:
+                provider_name = name
+                p = pc
+                break
 
     # Custom: direct OpenAI-compatible endpoint, bypasses LiteLLM
     if provider_name == "custom":
         return CustomProvider(
             api_key=p.api_key if p else "no-key",
-            api_base=config.get_api_base(model) or "http://localhost:8000/v1",
+            api_base=(p.api_base if p else None) or "http://localhost:8000/v1",
             default_model=model,
         )
 
-    from nanobot.providers.registry import find_by_name
-    spec = find_by_name(provider_name)
+    spec = find_by_name(provider_name) if provider_name else None
     if not model.startswith("bedrock/") and not (p and p.api_key) and not (spec and spec.is_oauth):
         console.print("[red]Error: No API key configured.[/red]")
         console.print("Set one in ~/.nanobot/config.json under providers section")
@@ -301,7 +328,7 @@ def _make_provider(config: Config):
 
     return LiteLLMProvider(
         api_key=p.api_key if p else None,
-        api_base=config.get_api_base(model),
+        api_base=(p.api_base if p else None) or config.get_api_base(),
         default_model=model,
         extra_headers=p.extra_headers if p else None,
         provider_name=provider_name,
@@ -321,7 +348,6 @@ def gateway(
     """Start the nanobot gateway."""
     from nanobot.config.loader import load_config, get_data_dir
     from nanobot.bus.queue import MessageBus
-    from nanobot.providers.litellm_provider import LiteLLMProvider
     from nanobot.agent.loop import AgentLoop
     from nanobot.channels.manager import ChannelManager
     from nanobot.session.manager import SessionManager
@@ -341,26 +367,15 @@ def gateway(
     bus = MessageBus()
     
     # Create provider (supports OpenRouter, Anthropic, OpenAI, Bedrock)
-    api_key = config.get_api_key()
-    api_base = config.get_api_base()
-    model = config.agents.defaults.model
-    is_bedrock = model.startswith("bedrock/")
+    provider = _make_provider(config)
+    
+    # Create session manager
+    session_manager = SessionManager(config.workspace_path)
 
-    if not api_key and not is_bedrock:
-        console.print("[red]Error: No API key configured.[/red]")
-        console.print("Set one in ~/.nanobot/config.json under providers.openrouter.apiKey")
-        raise typer.Exit(1)
-    
-    provider = LiteLLMProvider(
-        api_key=api_key,
-        api_base=api_base,
-        default_model=config.agents.defaults.model
-    )
-    
     # Create cron service first (callback set after agent creation)
     cron_store_path = get_data_dir() / "cron" / "jobs.json"
     cron = CronService(cron_store_path)
-    
+
     # Create agent with cron service
     agent = AgentLoop(
         bus=bus,

@@ -1,5 +1,7 @@
 """LiteLLM provider implementation for multi-provider support."""
 
+import json
+import json_repair
 import os
 from typing import Any
 
@@ -7,61 +9,160 @@ import litellm
 from litellm import acompletion
 
 from nanobot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from nanobot.providers.registry import find_by_model, find_gateway
+
+
+# Standard OpenAI chat-completion message keys; extras (e.g. reasoning_content) are stripped for strict providers.
+_ALLOWED_MSG_KEYS = frozenset({"role", "content", "tool_calls", "tool_call_id", "name"})
 
 
 class LiteLLMProvider(LLMProvider):
     """
     LLM provider using LiteLLM for multi-provider support.
     
-    Supports OpenRouter, Anthropic, OpenAI, Gemini, and many other providers through
-    a unified interface.
+    Supports OpenRouter, Anthropic, OpenAI, Gemini, MiniMax, and many other providers through
+    a unified interface.  Provider-specific logic is driven by the registry
+    (see providers/registry.py) — no if-elif chains needed here.
     """
     
     def __init__(
         self, 
         api_key: str | None = None, 
         api_base: str | None = None,
-        default_model: str = "moonshotai/kimi-k2.5"#"anthropic/claude-opus-4-5"
+        default_model: str = "anthropic/claude-opus-4-5",
+        extra_headers: dict[str, str] | None = None,
+        provider_name: str | None = None,
     ):
         super().__init__(api_key, api_base)
         self.default_model = default_model
+        self.extra_headers = extra_headers or {}
         
-        # Detect OpenRouter by api_key prefix or explicit api_base
-        self.is_openrouter = (
-            (api_key and api_key.startswith("sk-or-")) or
-            (api_base and "openrouter" in api_base)
-        )
+        # Detect gateway / local deployment.
+        # provider_name (from config key) is the primary signal;
+        # api_key / api_base are fallback for auto-detection.
+        self._gateway = find_gateway(provider_name, api_key, api_base)
         
-        # Track if using custom endpoint (vLLM, etc.)
-        self.is_vllm = bool(api_base) and not self.is_openrouter
-        
-        # Configure LiteLLM based on provider
+        # Configure environment variables
         if api_key:
-            if self.is_openrouter:
-                # OpenRouter mode - set key
-                os.environ["OPENROUTER_API_KEY"] = api_key
-            elif self.is_vllm:
-                # vLLM/custom endpoint - uses OpenAI-compatible API
-                os.environ["OPENAI_API_KEY"] = api_key
-            elif "deepseek" in default_model:
-                os.environ.setdefault("DEEPSEEK_API_KEY", api_key)
-            elif "anthropic" in default_model:
-                os.environ.setdefault("ANTHROPIC_API_KEY", api_key)
-            elif "openai" in default_model or "gpt" in default_model:
-                os.environ.setdefault("OPENAI_API_KEY", api_key)
-            elif "gemini" in default_model.lower():
-                os.environ.setdefault("GEMINI_API_KEY", api_key)
-            elif "zhipu" in default_model or "glm" in default_model or "zai" in default_model:
-                os.environ.setdefault("ZHIPUAI_API_KEY", api_key)
-            elif "groq" in default_model:
-                os.environ.setdefault("GROQ_API_KEY", api_key)
+            self._setup_env(api_key, api_base, default_model)
         
         if api_base:
             litellm.api_base = api_base
         
         # Disable LiteLLM logging noise
         litellm.suppress_debug_info = True
+        # Drop unsupported parameters for providers (e.g., gpt-5 rejects some params)
+        litellm.drop_params = True
     
+    def _setup_env(self, api_key: str, api_base: str | None, model: str) -> None:
+        """Set environment variables based on detected provider."""
+        spec = self._gateway or find_by_model(model)
+        if not spec:
+            return
+        if not spec.env_key:
+            # OAuth/provider-only specs (for example: openai_codex)
+            return
+
+        # Gateway/local overrides existing env; standard provider doesn't
+        if self._gateway:
+            os.environ[spec.env_key] = api_key
+        else:
+            os.environ.setdefault(spec.env_key, api_key)
+
+        # Resolve env_extras placeholders:
+        #   {api_key}  → user's API key
+        #   {api_base} → user's api_base, falling back to spec.default_api_base
+        effective_base = api_base or spec.default_api_base
+        for env_name, env_val in spec.env_extras:
+            resolved = env_val.replace("{api_key}", api_key)
+            resolved = resolved.replace("{api_base}", effective_base)
+            os.environ.setdefault(env_name, resolved)
+    
+    def _resolve_model(self, model: str) -> str:
+        """Resolve model name by applying provider/gateway prefixes."""
+        if self._gateway:
+            # Gateway mode: apply gateway prefix, skip provider-specific prefixes
+            prefix = self._gateway.litellm_prefix
+            if self._gateway.strip_model_prefix:
+                model = model.split("/")[-1]
+            if prefix and not model.startswith(f"{prefix}/"):
+                model = f"{prefix}/{model}"
+            return model
+        
+        # Standard mode: auto-prefix for known providers
+        spec = find_by_model(model)
+        if spec and spec.litellm_prefix:
+            model = self._canonicalize_explicit_prefix(model, spec.name, spec.litellm_prefix)
+            if not any(model.startswith(s) for s in spec.skip_prefixes):
+                model = f"{spec.litellm_prefix}/{model}"
+
+        return model
+
+    @staticmethod
+    def _canonicalize_explicit_prefix(model: str, spec_name: str, canonical_prefix: str) -> str:
+        """Normalize explicit provider prefixes like `github-copilot/...`."""
+        if "/" not in model:
+            return model
+        prefix, remainder = model.split("/", 1)
+        if prefix.lower().replace("-", "_") != spec_name:
+            return model
+        return f"{canonical_prefix}/{remainder}"
+    
+    def _supports_cache_control(self, model: str) -> bool:
+        """Return True when the provider supports cache_control on content blocks."""
+        if self._gateway is not None:
+            return self._gateway.supports_prompt_caching
+        spec = find_by_model(model)
+        return spec is not None and spec.supports_prompt_caching
+
+    def _apply_cache_control(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]] | None]:
+        """Return copies of messages and tools with cache_control injected."""
+        new_messages = []
+        for msg in messages:
+            if msg.get("role") == "system":
+                content = msg["content"]
+                if isinstance(content, str):
+                    new_content = [{"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}]
+                else:
+                    new_content = list(content)
+                    new_content[-1] = {**new_content[-1], "cache_control": {"type": "ephemeral"}}
+                new_messages.append({**msg, "content": new_content})
+            else:
+                new_messages.append(msg)
+
+        new_tools = tools
+        if tools:
+            new_tools = list(tools)
+            new_tools[-1] = {**new_tools[-1], "cache_control": {"type": "ephemeral"}}
+
+        return new_messages, new_tools
+
+    def _apply_model_overrides(self, model: str, kwargs: dict[str, Any]) -> None:
+        """Apply model-specific parameter overrides from the registry."""
+        model_lower = model.lower()
+        spec = find_by_model(model)
+        if spec:
+            for pattern, overrides in spec.model_overrides:
+                if pattern in model_lower:
+                    kwargs.update(overrides)
+                    return
+    
+    @staticmethod
+    def _sanitize_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Strip non-standard keys and ensure assistant messages have a content key."""
+        sanitized = []
+        for msg in messages:
+            clean = {k: v for k, v in msg.items() if k in _ALLOWED_MSG_KEYS}
+            # Strict providers require "content" even when assistant only has tool_calls
+            if clean.get("role") == "assistant" and "content" not in clean:
+                clean["content"] = None
+            sanitized.append(clean)
+        return sanitized
+
     async def chat(
         self,
         messages: list[dict[str, Any]],
@@ -83,40 +184,37 @@ class LiteLLMProvider(LLMProvider):
         Returns:
             LLMResponse with content and/or tool calls.
         """
-        model = model or self.default_model
-        
-        # For OpenRouter, prefix model name if not already prefixed
-        if self.is_openrouter and not model.startswith("openrouter/"):
-            model = f"openrouter/{model}"
-        
-        # For Zhipu/Z.ai, ensure prefix is present
-        # Handle cases like "glm-4.7-flash" -> "zai/glm-4.7-flash"
-        if ("glm" in model.lower() or "zhipu" in model.lower()) and not (
-            model.startswith("zhipu/") or 
-            model.startswith("zai/") or 
-            model.startswith("openrouter/")
-        ):
-            model = f"zai/{model}"
-        
-        # For vLLM, use hosted_vllm/ prefix per LiteLLM docs
-        # Convert openai/ prefix to hosted_vllm/ if user specified it
-        if self.is_vllm:
-            model = f"hosted_vllm/{model}"
-        
-        # For Gemini, ensure gemini/ prefix if not already present
-        if "gemini" in model.lower() and not model.startswith("gemini/"):
-            model = f"gemini/{model}"
+        original_model = model or self.default_model
+        model = self._resolve_model(original_model)
+
+        if self._supports_cache_control(original_model):
+            messages, tools = self._apply_cache_control(messages, tools)
+
+        # Clamp max_tokens to at least 1 — negative or zero values cause
+        # LiteLLM to reject the request with "max_tokens must be at least 1".
+        max_tokens = max(1, max_tokens)
         
         kwargs: dict[str, Any] = {
             "model": model,
-            "messages": messages,
+            "messages": self._sanitize_messages(self._sanitize_empty_content(messages)),
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
         
-        # Pass api_base directly for custom endpoints (vLLM, etc.)
+        # Apply model-specific overrides (e.g. kimi-k2.5 temperature)
+        self._apply_model_overrides(model, kwargs)
+        
+        # Pass api_key directly — more reliable than env vars alone
+        if self.api_key:
+            kwargs["api_key"] = self.api_key
+        
+        # Pass api_base for custom endpoints
         if self.api_base:
             kwargs["api_base"] = self.api_base
+        
+        # Pass extra headers (e.g. APP-Code for AiHubMix)
+        if self.extra_headers:
+            kwargs["extra_headers"] = self.extra_headers
         
         if tools:
             kwargs["tools"] = tools
@@ -143,11 +241,7 @@ class LiteLLMProvider(LLMProvider):
                 # Parse arguments from JSON string if needed
                 args = tc.function.arguments
                 if isinstance(args, str):
-                    import json
-                    try:
-                        args = json.loads(args)
-                    except json.JSONDecodeError:
-                        args = {"raw": args}
+                    args = json_repair.loads(args)
                 
                 tool_calls.append(ToolCallRequest(
                     id=tc.id,
@@ -163,11 +257,14 @@ class LiteLLMProvider(LLMProvider):
                 "total_tokens": response.usage.total_tokens,
             }
         
+        reasoning_content = getattr(message, "reasoning_content", None) or None
+        
         return LLMResponse(
             content=message.content,
             tool_calls=tool_calls,
             finish_reason=choice.finish_reason or "stop",
             usage=usage,
+            reasoning_content=reasoning_content,
         )
     
     def get_default_model(self) -> str:

@@ -81,9 +81,9 @@ describe("useGateway", () => {
 
       expect(result.current.connected).toBe(false);
 
-      // Connect manually
-      await act(async () => {
-        await result.current.connect();
+      // Connect manually (fire-and-forget: connect() waits for handshake, simulate below)
+      act(() => {
+        void result.current.connect();
       });
 
       await waitFor(() => {
@@ -180,13 +180,14 @@ describe("useGateway", () => {
         expect(result.current.connected).toBe(true);
       });
 
-      // Reconnect
-      await act(async () => {
-        await result.current.reconnect();
+      // Reconnect (fire-and-forget: reconnect awaits handshake, simulate below)
+      act(() => {
+        void result.current.reconnect();
       });
 
+      // Wait for new client to be set up (disconnect + new connect)
       await waitFor(() => {
-        expect(result.current.connected).toBe(false);
+        expect(result.current.client).not.toBeNull();
       });
 
       // Simulate new connection

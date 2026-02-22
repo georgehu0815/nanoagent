@@ -31,6 +31,7 @@ export class GatewayClient {
   private reconnectTimeout?: number;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
+  private stopped = false;
   private options: GatewayClientOptions;
 
   constructor(options: GatewayClientOptions) {
@@ -250,6 +251,8 @@ export class GatewayClient {
    * Disconnect from gateway
    */
   disconnect() {
+    this.stopped = true;
+
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = undefined;
@@ -276,6 +279,8 @@ export class GatewayClient {
    * Attempt to reconnect
    */
   private attemptReconnect() {
+    if (this.stopped) return;
+
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.log("[GatewayClient] Max reconnect attempts reached - gateway-client.ts:272");
       return;

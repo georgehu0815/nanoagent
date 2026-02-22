@@ -308,7 +308,7 @@ describe("GatewayClient", () => {
 
       const sentMessage = JSON.parse(mockWs.getLastSentMessage()!);
       expect(sentMessage.method).toBe("chat.send");
-      expect(sentMessage.params.text).toBe("What is TypeScript?");
+      expect(sentMessage.params.message).toBe("What is TypeScript?");
       expect(sentMessage.params.idempotencyKey).toMatch(/^chat-\d+-/);
 
       // Simulate response
@@ -429,7 +429,7 @@ describe("GatewayClient", () => {
         onDisconnect,
       });
 
-      await client.connect();
+      const connectPromise = client.connect();
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       mockWs = (client as any).ws as MockWebSocket;
@@ -441,6 +441,7 @@ describe("GatewayClient", () => {
           payload: { type: "hello-ok", protocol: 3 },
         }),
       );
+      await connectPromise;
 
       client.disconnect();
 
@@ -496,7 +497,7 @@ describe("GatewayClient", () => {
 
       const sentMessage = JSON.parse(mockWs.getLastSentMessage()!);
       expect(sentMessage.method).toBe("chat.abort");
-      expect(sentMessage.params.sessionId).toBe("test-session");
+      expect(sentMessage.params.sessionKey).toBe("test-session");
 
       mockWs.simulateMessage(
         JSON.stringify({

@@ -37,10 +37,10 @@ export function EventStream({ events }: EventStreamProps) {
           break;
 
         case "tool_progress":
-          if (tools.has(event.tool)) {
-            const exec = tools.get(event.tool)!;
-            exec.progressEvents.push(event);
+          if (!tools.has(event.tool)) {
+            tools.set(event.tool, { tool: event.tool, progressEvents: [] });
           }
+          tools.get(event.tool)!.progressEvents.push(event);
           break;
 
         case "tool_end":

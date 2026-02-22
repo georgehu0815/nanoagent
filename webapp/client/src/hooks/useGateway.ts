@@ -58,10 +58,9 @@ export function useGateway(options: UseGatewayOptions) {
       };
 
       const newClient = new GatewayClient(clientOptions);
-      await newClient.connect();
-
       clientRef.current = newClient;
       setClient(newClient);
+      await newClient.connect();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       console.error("[useGateway] Connection failed:", errorMessage);

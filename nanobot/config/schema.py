@@ -165,9 +165,20 @@ class QQConfig(Base):
     allow_from: list[str] = Field(default_factory=list)  # Allowed user openids (empty = public access)
 
 
+class WebConfig(Base):
+    """Web/WebSocket gateway channel configuration."""
+
+    enabled: bool = True
+    host: str = "0.0.0.0"
+    port: int = 18790
+    token: str = ""  # Optional auth token; if set, clients must supply it
+    allow_from: list[str] = Field(default_factory=list)  # Allowed client IDs (empty = allow all)
+
+
 class ChannelsConfig(Base):
     """Configuration for chat channels."""
 
+    web: WebConfig = Field(default_factory=WebConfig)
     whatsapp: WhatsAppConfig = Field(default_factory=WhatsAppConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     discord: DiscordConfig = Field(default_factory=DiscordConfig)

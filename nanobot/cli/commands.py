@@ -342,7 +342,7 @@ def _make_provider(config: Config):
 
 @app.command()
 def gateway(
-    port: int = typer.Option(18790, "--port", "-p", help="Gateway port"),
+    port: int = typer.Option(18790, "--port", "-p", help="WebSocket gateway port"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ):
     """Start the nanobot gateway."""
@@ -359,9 +359,13 @@ def gateway(
         import logging
         logging.basicConfig(level=logging.DEBUG)
 
-    console.print(f"{__logo__} Starting nanobot gateway on port {port}...")
-
     config = load_config()
+
+    # Wire the CLI --port into the web channel config so one port does everything
+    config.channels.web.port = port
+    config.channels.web.enabled = True
+
+    console.print(f"{__logo__} Starting nanobot gateway on ws://localhost:{port}")
     
     # Create components
     bus = MessageBus()
@@ -508,7 +512,6 @@ def agent(
         memory_window=config.agents.defaults.memory_window,
         brave_api_key=config.tools.web.search.api_key or None,
         exec_config=config.tools.exec,
-        cron_service=cron,
         restrict_to_workspace=config.tools.restrict_to_workspace,
         mcp_servers=config.tools.mcp_servers,
     )
@@ -643,6 +646,15 @@ def channels_status():
     table.add_column("Channel", style="cyan")
     table.add_column("Enabled", style="green")
     table.add_column("Configuration", style="yellow")
+
+    # Web / WebSocket
+    wb = config.channels.web
+    wb_config = f"ws://{wb.host}:{wb.port}"
+    table.add_row(
+        "Web",
+        "✓" if wb.enabled else "✗",
+        wb_config
+    )
 
     # WhatsApp
     wa = config.channels.whatsapp

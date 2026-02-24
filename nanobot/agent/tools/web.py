@@ -62,11 +62,14 @@ class WebSearchTool(Tool):
         self.max_results = max_results
     
     async def execute(self, query: str, count: int | None = None, **kwargs: Any) -> str:
-        if not self.api_key:
-            return "Error: BRAVE_API_KEY not configured"
-        
+        n = min(max(count or self.max_results, 1), 10)
+
+        if self.api_key:
+            return await self._brave_search(query, n)
+        return await self._ddg_search(query, n)
+
+    async def _brave_search(self, query: str, n: int) -> str:
         try:
-            n = min(max(count or self.max_results, 1), 10)
             async with httpx.AsyncClient() as client:
                 r = await client.get(
                     "https://api.search.brave.com/res/v1/web/search",
@@ -75,16 +78,36 @@ class WebSearchTool(Tool):
                     timeout=10.0
                 )
                 r.raise_for_status()
-            
+
             results = r.json().get("web", {}).get("results", [])
             if not results:
                 return f"No results for: {query}"
-            
+
             lines = [f"Results for: {query}\n"]
             for i, item in enumerate(results[:n], 1):
                 lines.append(f"{i}. {item.get('title', '')}\n   {item.get('url', '')}")
                 if desc := item.get("description"):
                     lines.append(f"   {desc}")
+            return "\n".join(lines)
+        except Exception as e:
+            return f"Error: {e}"
+
+    async def _ddg_search(self, query: str, n: int) -> str:
+        try:
+            from ddgs import DDGS
+            import asyncio
+
+            results = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: list(DDGS().text(query, max_results=n))
+            )
+            if not results:
+                return f"No results for: {query}"
+
+            lines = [f"Results for: {query}\n"]
+            for i, item in enumerate(results, 1):
+                lines.append(f"{i}. {item.get('title', '')}\n   {item.get('href', '')}")
+                if body := item.get("body"):
+                    lines.append(f"   {body}")
             return "\n".join(lines)
         except Exception as e:
             return f"Error: {e}"

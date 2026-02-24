@@ -16,7 +16,8 @@ docs/
 .venv/
 venv/
 __pycache__/
-
+node_modules/
+**/**/node_modules/
 # Security - Never commit these
 config.json
 *.key

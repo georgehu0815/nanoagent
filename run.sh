@@ -1,9 +1,10 @@
 #!/bin/bash
-
+. .venv/bin/activate
 # Nanobot startup script with automatic cleanup of existing instances
 
 echo "🐈 Starting nanobot gateway on port 18790..."
-
+export BRAVE_API_KEY=$(cat .brave_api_key 2>/dev/null)
+# export OPENAI_API_KEY=$(cat .openai_api_key 2>/dev/null)
 # Check for existing nanobot instances
 EXISTING_PIDS=$(ps aux | grep -E "[n]anobot gateway" | awk '{print $2}')
 

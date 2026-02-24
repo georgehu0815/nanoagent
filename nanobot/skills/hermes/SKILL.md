@@ -1,6 +1,6 @@
 ---
 name: hermes
-description: Query the Hermes StarRocks analytics platform using the mcp-hermes CLI. Use when the user asks a business or data question against StarRocks, wants to explore available tables or columns, needs to generate SQL from natural language, or wants to execute a SELECT query. Triggers on "hermes", "hermes tools", "StarRocks", "query", "what tables", "show me data", "generate SQL", "find column", "active users", "revenue", or any analytics/data question.
+description: Query the Hermes StarRocks analytics platform using the mcp-hermes CLI. Use when the user asks a business or data question against StarRocks, wants to explore available tables or columns, needs to generate SQL from natural language, or wants to execute a SELECT query. Triggers on "hermes", "hermes tools", "StarRocks", "query", "what tables", "show me data", "generate SQL", "find column", "active users", "revenue","add-dataset", "search-datasets", or any analytics/data question.
 ---
 
 # Hermes StarRocks CLI Skill
@@ -9,7 +9,7 @@ Answer business data questions by running the `mcp-hermes` CLI tools.
 
 ## Setup
 
-- **CLI binary:** `/Users/ghu/aiworker/mcp-hermes/.venv/bin/hermes`
+- **CLI binary:** `hermes`
 - **Prerequisite:** Azure CLI login (`az account show` to verify)
 
 All commands use the full path to the venv binary above.
@@ -27,20 +27,22 @@ Always follow this order — skip steps that are not needed:
 5. find-joins          → validate join paths before multi-table SQL
 6. sql                 → generate SQL from the user's question
 7. execute             → run the final SELECT statement
+8. add-dataset         → add new datasets to metastore for discoverability
+9. search-datasets     → verify datasets are indexed in metastore
 ```
 
 ## Commands
 
 ### 0. Explore available tools
 ```bash
-python /Users/ghu/aiworker/mcp-hermes/cli.py tools
+hermes tools
 ```
 
 ---
 
 ### 1. List available tables
 ```bash
-/Users/ghu/aiworker/mcp-hermes/.venv/bin/hermes get-tables
+hermes get-tables
 ```
 No arguments. Run this first when the user asks "what data is available?" or you don't know which tables to use.
 
@@ -48,7 +50,7 @@ No arguments. Run this first when the user asks "what data is available?" or you
 
 ### 2. Get table schema
 ```bash
-/Users/ghu/aiworker/mcp-hermes/.venv/bin/hermes get-columns --table <table_name>
+hermes get-columns --table <table_name>
 ```
 Run before generating SQL. Replace `<table_name>` with a name from `get-tables`.
 
@@ -56,7 +58,7 @@ Run before generating SQL. Replace `<table_name>` with a name from `get-tables`.
 
 ### 3. Fuzzy-search for columns
 ```bash
-/Users/ghu/aiworker/mcp-hermes/.venv/bin/hermes find-columns --search "<terms>" [--domain <domain>] [--dataset <dataset>]
+hermes find-columns --search "<terms>" [--domain <domain>] [--dataset <dataset>]
 ```
 - `--search`: comma-separated terms, e.g. `"device id,status,revenue"`
 - `--domain`: optional scope, e.g. `sales`, `telemetry`, `iot`
@@ -68,7 +70,7 @@ Use when: the user says "device id" but the actual column name is unknown.
 
 ### 4. Resolve business terminology
 ```bash
-/Users/ghu/aiworker/mcp-hermes/.venv/bin/hermes find-terminologies --search "<terms>" [--domain <domain>]
+hermes find-terminologies --search "<terms>" [--domain <domain>]
 ```
 - `--search`: semicolon-separated business terms, e.g. `"active users; churn rate"`
 - `--domain`: optional domain scope
@@ -79,7 +81,7 @@ Use when: the user uses business language like "active users", "DAU", "net reven
 
 ### 5. Validate join relationships
 ```bash
-/Users/ghu/aiworker/mcp-hermes/.venv/bin/hermes find-joins --datasets "<ds1>:<ds2>" [--domain <domain>]
+hermes find-joins --datasets "<ds1>:<ds2>" [--domain <domain>]
 ```
 - `--datasets`: colon-separated pairs; multiple pairs comma-separated, e.g. `"orders:customers,orders:products"`
 
@@ -89,7 +91,7 @@ Use when: the question requires joining two or more tables.
 
 ### 6. Generate SQL from natural language
 ```bash
-/Users/ghu/aiworker/mcp-hermes/.venv/bin/hermes sql --query "<question>" --domain "<domain>"
+hermes sql --query "<question>" --domain "<domain>"
 ```
 Output includes:
 - `SQL:` — the generated statement
@@ -103,7 +105,7 @@ Output includes:
 
 ### 7. Execute a SELECT query
 ```bash
-/Users/ghu/aiworker/mcp-hermes/.venv/bin/hermes execute --query "<SQL>"
+hermes execute --query "<SQL>"
 ```
 - Only `SELECT` statements are accepted; the CLI enforces this
 - Use the SQL from step 6, or a validated statement the user provides
@@ -123,6 +125,14 @@ Output includes:
 | "Join X and Y" | `find-joins` → `sql` → `execute` |
 | "Run this SQL: SELECT ..." | `execute` (confirm with user first) |
 | Any analytics question | `find-terminologies` → `sql` → `execute` |
+| User says... | Command |
+| "Add dataset X to metastore" | `add-dataset -n X` |
+| "Register dataset X" | `add-dataset -n X` |
+| "Does dataset X exist in metastore?" | `search-datasets -n X` |
+| "Find datasets matching X" | `search-datasets -n X` |
+| "Search for X in the metastore" | `search-datasets -n X` |
+|---|---|
+
 
 ## Error Handling
 
@@ -151,24 +161,34 @@ Common errors:
 User asks: *"what hermes mcp tools do you have?"*
 ```bash
 # 0. Resolve "hermes mcp tools"
-/Users/ghu/aiworker/mcp-hermes/.venv/bin/hermes tools
+hermes tools
 ```
 
 User asks: *"Show active users by region for last quarter"*
 
 ```bash
 # 1. Resolve "active users"
-/Users/ghu/aiworker/mcp-hermes/.venv/bin/hermes find-terminologies --search "active users" --domain analytics
+hermes find-terminologies --search "active users" --domain analytics
 
 # 2. Find the region column
-/Users/ghu/aiworker/mcp-hermes/.venv/bin/hermes find-columns --search "region" --domain analytics
+hermes find-columns --search "region" --domain analytics
 
 # 3. Generate SQL
-/Users/ghu/aiworker/mcp-hermes/.venv/bin/hermes sql \
+hermes sql \
   --query "Show active users by region for last quarter" \
   --domain analytics
 
 # 4. Execute (using the SQL from step 3 output)
-/Users/ghu/aiworker/mcp-hermes/.venv/bin/hermes execute \
+hermes execute \
   --query "SELECT region, COUNT(DISTINCT user_id) FROM user_activity WHERE ..."
+
+
+  ## Workflow: Add then verify
+
+# 5. Register the dataset
+hermes add-dataset -n "my-new-dataset"
+
+# 6. Confirm it is indexed and searchable
+hermes search-datasets -n "my-new-dataset"
+```
 ```

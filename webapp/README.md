@@ -1,6 +1,8 @@
-# Dexter Web Interface
+# Agentflow Web Interface
 
 React-based web interface for the Dexter AI agent with real-time streaming responses.
+
+## Author: George Hu
 
 ## 🚀 Quick Start
 

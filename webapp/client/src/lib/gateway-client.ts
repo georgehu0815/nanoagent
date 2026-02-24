@@ -50,6 +50,11 @@ export class GatewayClient {
     console.log("[GatewayClient] Connecting to: - gateway-client.ts:46", this.options.url);
 
     return new Promise<any>((resolve, reject) => {
+      // Track whether this connect() promise has already settled.
+      // onerror before settle → reject the promise (catch in useGateway handles it).
+      // onerror after settle  → call onError so the hook can update its state.
+      let settled = false;
+
       try {
         this.ws = new WebSocket(this.options.url);
 
@@ -62,13 +67,24 @@ export class GatewayClient {
 
         this.ws.onmessage = (event) => {
           const frame: GatewayFrame = JSON.parse(event.data);
-          this.handleFrame(frame, resolve, reject);
+          this.handleFrame(
+            frame,
+            (v) => { settled = true; resolve(v); },
+            (e) => { settled = true; reject(e); },
+          );
         };
 
         this.ws.onerror = (error) => {
           console.error("[GatewayClient] WebSocket error: - gateway-client.ts:63", error);
-          this.options.onError?.(new Error("WebSocket connection error"));
-          reject(new Error("WebSocket connection error"));
+          const err = new Error("WebSocket connection error");
+          if (settled) {
+            // Runtime error after connection — notify the hook directly.
+            this.options.onError?.(err);
+          } else {
+            // Connection-phase error — let the Promise rejection propagate.
+            settled = true;
+            reject(err);
+          }
         };
 
         this.ws.onclose = () => {

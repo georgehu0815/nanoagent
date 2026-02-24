@@ -44,6 +44,7 @@ export function useGateway(options: UseGatewayOptions) {
           console.log("[useGateway] Connected:", payload);
           setConnected(true);
           setConnecting(false);
+          setError(null);
         },
         onDisconnect: () => {
           console.log("[useGateway] Disconnected");

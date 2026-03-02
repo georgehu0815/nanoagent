@@ -224,6 +224,23 @@ class AzureProviderConfig(Base):
     use_azure_ad: bool = True  # Use Azure AD authentication by default
 
 
+class AgencyProviderConfig(Base):
+    """Agency Copilot provider configuration.
+
+    When enabled, nanobot forwards chat to the local Agency CLI instead of
+    calling Azure OpenAI directly.  Switch between the two by toggling
+    ``enabled``: false → Azure (managed identity), true → Agency Copilot.
+
+    Auth priority: agency CLI (cli_path) > github_token > gh session fallback.
+    """
+    enabled: bool = False
+    cli_path: str = "~/.config/agency/CurrentVersion/agency"
+    cli_args: list[str] = Field(default_factory=lambda: ["copilot"])
+    default_model: str = "agency/copilot"
+    github_token: str = ""  # Fallback auth when agency CLI binary is not found
+    skills_dir: str = ""    # Extra skills directory (workspace/skills is also loaded automatically)
+
+
 class ProvidersConfig(BaseModel):
     """Configuration for LLM providers."""
     azure: AzureProviderConfig = Field(default_factory=AzureProviderConfig)
@@ -233,7 +250,7 @@ class ProvidersConfig(BaseModel):
     deepseek: ProviderConfig = Field(default_factory=ProviderConfig)
     groq: ProviderConfig = Field(default_factory=ProviderConfig)
     zhipu: ProviderConfig = Field(default_factory=ProviderConfig)
-    dashscope: ProviderConfig = Field(default_factory=ProviderConfig)  # 阿里云通义千问
+    dashscope: ProviderConfig = Field(default_factory=ProviderConfig)  # 
     vllm: ProviderConfig = Field(default_factory=ProviderConfig)
     gemini: ProviderConfig = Field(default_factory=ProviderConfig)
     moonshot: ProviderConfig = Field(default_factory=ProviderConfig)
@@ -243,6 +260,7 @@ class ProvidersConfig(BaseModel):
     volcengine: ProviderConfig = Field(default_factory=ProviderConfig)  # VolcEngine (火山引擎) API gateway
     openai_codex: ProviderConfig = Field(default_factory=ProviderConfig)  # OpenAI Codex (OAuth)
     github_copilot: ProviderConfig = Field(default_factory=ProviderConfig)  # Github Copilot (OAuth)
+    agency: AgencyProviderConfig = Field(default_factory=AgencyProviderConfig)  # Agency Copilot (CLI)
 
 
 class GatewayConfig(Base):
@@ -269,6 +287,8 @@ class ExecToolConfig(Base):
     """Shell exec tool configuration."""
 
     timeout: int = 60
+    allow_patterns: list[str] = Field(default_factory=list)  # If non-empty, only commands matching these regex patterns are allowed
+    deny_patterns: list[str] = Field(default_factory=list)   # Extra patterns to block (merged with built-in safety guards)
 
 
 class MCPServerConfig(Base):
@@ -335,6 +355,18 @@ class Config(BaseSettings):
     def is_azure_configured(self) -> bool:
         """Check if Azure OpenAI is configured."""
         return bool(self.providers.azure.api_base)
+
+    def is_agency_configured(self) -> bool:
+        """Check if the Agency Copilot provider is enabled."""
+        return self.providers.agency.enabled
+
+    def get_agency_config(self) -> dict:
+        """Get Agency provider configuration."""
+        return {
+            "cli_path": self.providers.agency.cli_path,
+            "cli_args": self.providers.agency.cli_args,
+            "default_model": self.providers.agency.default_model,
+        }
 
     def get_azure_config(self) -> dict:
         """Get Azure OpenAI configuration."""

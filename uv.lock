@@ -775,6 +775,23 @@ wheels = [
 ]
 
 [[package]]
+name = "github-copilot-sdk"
+version = "0.1.29"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "python-dateutil" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/11/8e/2155e40594a60084266d33cefd2333fe3ce44e7189773e6eff9943e25d81/github_copilot_sdk-0.1.29-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:0215045cf6ec2cebfc6dbb0e257e2116d4aa05751f80cc48d5f3c8c658933094", size = 58182462, upload-time = "2026-02-27T22:09:59.687Z" },
+    { url = "https://files.pythonhosted.org/packages/55/6a/9fa577564702eb1eb143c16afcdadf7d6305da53fbbd05a0925035808d9e/github_copilot_sdk-0.1.29-py3-none-macosx_11_0_arm64.whl", hash = "sha256:441c917aad8501da5264026b0da5c0e834571256e812617437654ab16bdad77f", size = 54934772, upload-time = "2026-02-27T22:10:02.911Z" },
+    { url = "https://files.pythonhosted.org/packages/69/77/0e0fd6f6a0177d93f5f3e5d0e9ed5044fc53c54e58e65bbc6b08eb789350/github_copilot_sdk-0.1.29-py3-none-manylinux_2_28_aarch64.whl", hash = "sha256:88230b779dee1695fc44043060006224138c5b5d6724890f7ecdc378ff0d8f73", size = 61071028, upload-time = "2026-02-27T22:10:06.332Z" },
+    { url = "https://files.pythonhosted.org/packages/94/f5/9a73bd6e34db4d0ce546b04725cfad1c9fa58426265876b640376381b623/github_copilot_sdk-0.1.29-py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:2019bbbaea39d8db54250d11431d89952dd0ad0a16b58159b6b018ea625c78c9", size = 59251702, upload-time = "2026-02-27T22:10:09.466Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/32/60713b1ae3ed80b62113f993bd2f4552d2b03753cfea37f90086ac8e6d6e/github_copilot_sdk-0.1.29-py3-none-win_amd64.whl", hash = "sha256:a326fe5ab6ecd7cef5de39d5a5fe18e09e629eb29b401be23a709e83fc578578", size = 53690857, upload-time = "2026-02-27T22:10:12.778Z" },
+    { url = "https://files.pythonhosted.org/packages/58/31/d082f4ac13cf3e4ba3a7846b8468521d6d38967de3788a61b6001707fbb5/github_copilot_sdk-0.1.29-py3-none-win_arm64.whl", hash = "sha256:1ace40f23ab8d8c97f8d61d31d01946ade9c83ea7982671864ec5aef0cd7dd01", size = 51699152, upload-time = "2026-02-27T22:10:15.791Z" },
+]
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1571,6 +1588,7 @@ dependencies = [
     { name = "croniter" },
     { name = "ddgs" },
     { name = "dingtalk-stream" },
+    { name = "github-copilot-sdk" },
     { name = "httpx" },
     { name = "json-repair" },
     { name = "lark-oapi" },
@@ -1609,6 +1627,7 @@ requires-dist = [
     { name = "croniter", specifier = ">=6.0.0,<7.0.0" },
     { name = "ddgs", specifier = ">=9.0.0" },
     { name = "dingtalk-stream", specifier = ">=0.24.0,<1.0.0" },
+    { name = "github-copilot-sdk", specifier = ">=0.1.23" },
     { name = "httpx", specifier = ">=0.28.0,<1.0.0" },
     { name = "json-repair", specifier = ">=0.57.0,<1.0.0" },
     { name = "lark-oapi", specifier = ">=1.5.0,<2.0.0" },

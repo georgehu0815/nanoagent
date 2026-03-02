@@ -270,13 +270,27 @@ This file stores important information that should persist across sessions.
     skills_dir.mkdir(exist_ok=True)
 
 
-def _make_provider(config: Config):
+def _make_provider(config: Config, workspace: Path | None = None):
     """Create the appropriate LLM provider from config."""
     from nanobot.providers.litellm_provider import LiteLLMProvider
     from nanobot.providers.openai_codex_provider import OpenAICodexProvider
     from nanobot.providers.custom_provider import CustomProvider
 
     model = config.agents.defaults.model
+
+    # Agency Copilot (local CLI) — takes priority over Azure when enabled
+    if model.startswith("agency/") or config.is_agency_configured():
+        from nanobot.providers.agency_provider import AgencyProvider
+        ag = config.providers.agency
+        # Default skills dir: workspace/skills (loaded automatically if it exists)
+        skills_dir = ag.skills_dir or (str(workspace / "skills") if workspace else None)
+        return AgencyProvider(
+            cli_path=ag.cli_path,
+            cli_args=list(ag.cli_args),
+            default_model=ag.default_model,
+            github_token=ag.github_token or None,
+            skills_dir=skills_dir,
+        )
 
     # Azure OpenAI (managed identity or API key — no static key required)
     if model.startswith("azure/") or config.is_azure_configured():
@@ -369,9 +383,9 @@ def gateway(
     
     # Create components
     bus = MessageBus()
-    
+
     # Create provider (supports OpenRouter, Anthropic, OpenAI, Bedrock)
-    provider = _make_provider(config)
+    provider = _make_provider(config, workspace=config.workspace_path)
     
     # Create session manager
     session_manager = SessionManager(config.workspace_path)
@@ -985,7 +999,7 @@ def cron_run(
     logger.disable("nanobot")
 
     config = load_config()
-    provider = _make_provider(config)
+    provider = _make_provider(config, workspace=config.workspace_path)
     bus = MessageBus()
     agent_loop = AgentLoop(
         bus=bus,

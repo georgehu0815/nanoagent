@@ -12,6 +12,18 @@ from nanobot.agent.tools.base import Tool
 class ExecTool(Tool):
     """Tool to execute shell commands."""
     
+    _BUILTIN_DENY_PATTERNS: list[str] = [
+        r"\brm\s+-[rf]{1,2}\b",          # rm -r, rm -rf, rm -fr
+        r"\bdel\s+/[fq]\b",              # del /f, del /q
+        r"\brmdir\s+/s\b",               # rmdir /s
+        r"(?:^|[;&|]\s*)format\b",       # format (as standalone command only)
+        r"\b(mkfs|diskpart)\b",          # disk operations
+        r"\bdd\s+if=",                   # dd
+        r">\s*/dev/sd",                  # write to disk
+        r"\b(shutdown|reboot|poweroff)\b",  # system power
+        r":\(\)\s*\{.*\};\s*:",          # fork bomb
+    ]
+
     def __init__(
         self,
         timeout: int = 60,
@@ -22,17 +34,8 @@ class ExecTool(Tool):
     ):
         self.timeout = timeout
         self.working_dir = working_dir
-        self.deny_patterns = deny_patterns or [
-            r"\brm\s+-[rf]{1,2}\b",          # rm -r, rm -rf, rm -fr
-            r"\bdel\s+/[fq]\b",              # del /f, del /q
-            r"\brmdir\s+/s\b",               # rmdir /s
-            r"(?:^|[;&|]\s*)format\b",       # format (as standalone command only)
-            r"\b(mkfs|diskpart)\b",          # disk operations
-            r"\bdd\s+if=",                   # dd
-            r">\s*/dev/sd",                  # write to disk
-            r"\b(shutdown|reboot|poweroff)\b",  # system power
-            r":\(\)\s*\{.*\};\s*:",          # fork bomb
-        ]
+        # Extra deny_patterns are additive — built-in safety guards always apply
+        self.deny_patterns = self._BUILTIN_DENY_PATTERNS + (deny_patterns or [])
         self.allow_patterns = allow_patterns or []
         self.restrict_to_workspace = restrict_to_workspace
     

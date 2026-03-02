@@ -143,6 +143,57 @@ tpm decode --table
 
 ---
 
+## Running in Nanobot (Telegram / any channel)
+
+In nanobot the shell tool is **`exec`**, not `Bash`. Use it directly:
+
+```
+exec(command="tpm hello")
+exec(command="tpm attestation --save-report")
+exec(command="tpm decode 1229346816 1297303124")
+```
+
+`tpm` is not blocked by nanobot's built-in safety guards, so these run immediately.
+
+> **⚠️ Timeout:** Multi-query scenarios (`hello`, `rqv`, `statechange`) each take **2–3 minutes**.
+> The exec tool default timeout is 60 s — you **must** raise it in `nanobot.yaml`:
+> ```yaml
+> tools:
+>   exec:
+>     timeout: 300
+> ```
+
+**Optional — restrict exec to tpm-only** in `nanobot.yaml`:
+```yaml
+tools:
+  exec:
+    allow_patterns:
+      - "^tpm "
+```
+
+**Auth:** DefaultAzureCredential uses the `az login` session on the nanobot server.
+If the server has no browser, run `az login --use-device-code` once, then restart nanobot.
+
+---
+
+## When Exec Is Blocked (Claude Code / restricted environments)
+
+If `exec` / `Bash(tpm *)` is not available, respond with:
+
+> I can't run `tpm` directly here — shell execution is blocked in this environment.
+> Run the command below on your local machine and paste the output back:
+>
+> ```bash
+> tpm <scenario>        # e.g. tpm hello, tpm attestation, tpm rqv …
+> ```
+>
+> **Auth:** `az login` (one-time — DefaultAzureCredential picks it up automatically)
+> **Full command reference:** see `LOCAL_GUIDE.md` in this skill directory.
+
+Then wait for the user to paste output and interpret it normally.
+
+---
+
 ## Workflow
 
 ### When the user asks a TPM health question:
